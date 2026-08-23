@@ -56,7 +56,9 @@ export default function PFEOverview() {
           accent="red"
           title="Open Failure Probability"
           description="Ranked by VIN — pick a vehicle, then check the failure probability of every part tracked on it, with the precursor signals driving each score."
-          onOpen={() => onNavigate("failureProbability")}
+          onOpen={() =>
+            navigate("/predictive-failure-engine/failure-probability")
+          }
         />
         <ShortcutCard
           icon={ListChecks}

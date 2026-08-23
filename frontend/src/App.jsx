@@ -5,6 +5,7 @@ import Overview from "./views/Overview";
 import AIAssistant from "./views/AIAssistant";
 import PFEOverview from "./views/PFEOverview";
 import RuleBuilder from "./views/RuleBuilder";
+import FailureProbability from "./views/FailureProbability";
 
 const pageMeta = {
   "/": {
@@ -22,6 +23,10 @@ const pageMeta = {
   "/predictive-failure-engine/rule-builder": {
     title: "Rule Builder",
     subtitle: "Build failure probability rules from fleet signals",
+  },
+  "/predictive-failure-engine/failure-probability": {
+    title: "Failure Probability",
+    subtitle: "Inspect component failure predictions by VIN",
   },
 };
 
@@ -55,6 +60,10 @@ export default function App() {
           <Route
             path="/predictive-failure-engine/rule-builder"
             element={<RuleBuilder />}
+          />
+          <Route
+            path="/predictive-failure-engine/failure-probability"
+            element={<FailureProbability />}
           />
         </Routes>
       </Layout>
