@@ -4,6 +4,7 @@ import Header from "./components/layout/Header.jsx";
 import Overview from "./views/Overview";
 import AIAssistant from "./views/AIAssistant";
 import PFEOverview from "./views/PFEOverview";
+import RuleBuilder from "./views/RuleBuilder";
 
 const pageMeta = {
   "/": {
@@ -17,6 +18,10 @@ const pageMeta = {
   "/predictive-failure-engine": {
     title: "Predictive Failure Engine",
     subtitle: "Rule builder, scoring, and RUL",
+  },
+  "/predictive-failure-engine/rule-builder": {
+    title: "Rule Builder",
+    subtitle: "Build failure probability rules from fleet signals",
   },
 };
 
@@ -47,6 +52,10 @@ export default function App() {
           <Route path="/ai-assistant" element={<AIAssistant />} />
 
           <Route path="/predictive-failure-engine" element={<PFEOverview />} />
+          <Route
+            path="/predictive-failure-engine/rule-builder"
+            element={<RuleBuilder />}
+          />
         </Routes>
       </Layout>
     </BrowserRouter>

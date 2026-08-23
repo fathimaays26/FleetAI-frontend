@@ -1,10 +1,13 @@
 import { Zap, AlertTriangle, ListChecks, Radar } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import PfeStatCard from "../components/pfe/PfeStatCard";
 import TopPrecursorChart from "../components/pfe/TopPrecursorChart";
 import ShortcutCard from "../components/pfe/ShortcutCard";
 import { pfeStats, topPrecursorSignals } from "../data/pfeMockData";
 
-export default function PFEOverview({ onNavigate }) {
+export default function PFEOverview() {
+  const navigate = useNavigate();
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-4 gap-4">
@@ -46,7 +49,7 @@ export default function PFEOverview({ onNavigate }) {
           accent="purple"
           title="Open Failure Probability Rule Builder"
           description="VoltIQ-style guided flow: select a failed part, review its fleet history, correlate telematics signals, and deploy a Failure Probability Calculation Rule."
-          onOpen={() => onNavigate("ruleBuilder")}
+          onOpen={() => navigate("/predictive-failure-engine/rule-builder")}
         />
         <ShortcutCard
           icon={AlertTriangle}
