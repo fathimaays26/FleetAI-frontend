@@ -6,6 +6,7 @@ import AIAssistant from "./views/AIAssistant";
 import PFEOverview from "./views/PFEOverview";
 import RuleBuilder from "./views/RuleBuilder";
 import FailureProbability from "./views/FailureProbability";
+import RULExplorer from "./views/RULExplorer";
 
 const pageMeta = {
   "/": {
@@ -27,6 +28,10 @@ const pageMeta = {
   "/predictive-failure-engine/failure-probability": {
     title: "Failure Probability",
     subtitle: "Inspect component failure predictions by VIN",
+  },
+  "/predictive-failure-engine/rul-explorer": {
+    title: "RUL Explorer",
+    subtitle: "Inspect remaining useful life by VIN and component",
   },
 };
 
@@ -64,6 +69,10 @@ export default function App() {
           <Route
             path="/predictive-failure-engine/failure-probability"
             element={<FailureProbability />}
+          />
+          <Route
+            path="/predictive-failure-engine/rul-explorer"
+            element={<RULExplorer />}
           />
         </Routes>
       </Layout>

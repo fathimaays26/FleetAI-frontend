@@ -65,7 +65,7 @@ export default function PFEOverview() {
           accent="teal"
           title="Open RUL Explorer"
           description="Ranked by VIN — pick a vehicle, then check the remaining useful life of every part tracked on it, with the degradation curve behind each estimate."
-          onOpen={() => onNavigate("rulExplorer")}
+          onOpen={() => navigate("/predictive-failure-engine/rul-explorer")}
         />
       </div>
     </div>
