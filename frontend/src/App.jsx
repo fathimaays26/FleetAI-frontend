@@ -1,24 +1,52 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-
-import { AppLayout } from "./components/AppLayout";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import Sidebar from "./components/layout/Sidebar";
+import Header from "./components/layout/Header";
 import Overview from "./views/Overview";
 import AIAssistant from "./views/AIAssistant";
 import FailureProbability from "./views/FailureProbability";
 
-function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/overview" replace />} />
+const pageMeta = {
+  "/": {
+    title: "Overview",
+    subtitle: "Fleet health, risk distribution and maintenance signals",
+  },
+  "/ai-assistant": {
+    title: "AI Assistant",
+    subtitle: "Ask questions about your fleet",
+  },
+  "/predictive-failure-engine": {
+    title: "Predictive Failure Engine",
+    subtitle: "Rule builder, scoring, and RUL",
+  },
+};
 
-        <Route element={<AppLayout />}>
-          <Route path="/overview" element={<Overview />} />
-          <Route path="/ai-assistant" element={<AIAssistant />} />
-          <Route path="/predictive-failure" element={<FailureProbability />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+function Layout({ children }) {
+  const location = useLocation();
+  const meta = pageMeta[location.pathname] ?? {};
+  return (
+    <div className="flex">
+      <Sidebar />
+      <div className="flex-1 min-h-screen bg-gray-50">
+        <Header title={meta.title} subtitle={meta.subtitle} />
+        <main className="p-8">{children}</main>
+      </div>
+    </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Overview />} />
+          <Route path="/ai-assistant" element={<AIAssistant />} />
+          <Route
+            path="/predictive-failure-engine"
+            element={<FailureProbability />}
+          />
+        </Routes>
+      </Layout>
+    </BrowserRouter>
+  );
+}
