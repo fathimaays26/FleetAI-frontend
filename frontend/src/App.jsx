@@ -1,9 +1,9 @@
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Sidebar from "./components/layout/Sidebar";
-import Header from "./components/layout/Header";
+import Header from "./components/layout/Header.jsx";
 import Overview from "./views/Overview";
 import AIAssistant from "./views/AIAssistant";
-import FailureProbability from "./views/FailureProbability";
+import PFEOverview from "./views/PFEOverview";
 
 const pageMeta = {
   "/": {
@@ -23,11 +23,14 @@ const pageMeta = {
 function Layout({ children }) {
   const location = useLocation();
   const meta = pageMeta[location.pathname] ?? {};
+
   return (
     <div className="flex">
       <Sidebar />
+
       <div className="flex-1 min-h-screen bg-gray-50">
         <Header title={meta.title} subtitle={meta.subtitle} />
+
         <main className="p-8">{children}</main>
       </div>
     </div>
@@ -40,11 +43,10 @@ export default function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<Overview />} />
+
           <Route path="/ai-assistant" element={<AIAssistant />} />
-          <Route
-            path="/predictive-failure-engine"
-            element={<FailureProbability />}
-          />
+
+          <Route path="/predictive-failure-engine" element={<PFEOverview />} />
         </Routes>
       </Layout>
     </BrowserRouter>
