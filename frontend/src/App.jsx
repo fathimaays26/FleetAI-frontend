@@ -1,9 +1,12 @@
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Sidebar from "./components/layout/Sidebar";
-import Header from "./components/layout/Header";
+import Header from "./components/layout/Header.jsx";
 import Overview from "./views/Overview";
 import AIAssistant from "./views/AIAssistant";
+import PFEOverview from "./views/PFEOverview";
+import RuleBuilder from "./views/RuleBuilder";
 import FailureProbability from "./views/FailureProbability";
+import RULExplorer from "./views/RULExplorer";
 
 const pageMeta = {
   "/": {
@@ -18,17 +21,34 @@ const pageMeta = {
     title: "Predictive Failure Engine",
     subtitle: "Rule builder, scoring, and RUL",
   },
+  "/predictive-failure-engine/rule-builder": {
+    title: "Rule Builder",
+    subtitle: "Build failure probability rules from fleet signals",
+  },
+  "/predictive-failure-engine/failure-probability": {
+    title: "Failure Probability",
+    subtitle: "Inspect component failure predictions by VIN",
+  },
+  "/predictive-failure-engine/rul-explorer": {
+    title: "RUL Explorer",
+    subtitle: "Inspect remaining useful life by VIN and component",
+  },
 };
 
 function Layout({ children }) {
   const location = useLocation();
   const meta = pageMeta[location.pathname] ?? {};
+
   return (
-    <div className="flex">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar />
-      <div className="flex-1 min-h-screen bg-gray-50">
+
+      <div className="flex-1 min-w-0 flex flex-col bg-gray-50">
         <Header title={meta.title} subtitle={meta.subtitle} />
-        <main className="p-8">{children}</main>
+
+        <main className="flex-1 overflow-y-auto p-8">
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -40,10 +60,21 @@ export default function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<Overview />} />
+
           <Route path="/ai-assistant" element={<AIAssistant />} />
+
+          <Route path="/predictive-failure-engine" element={<PFEOverview />} />
           <Route
-            path="/predictive-failure-engine"
+            path="/predictive-failure-engine/rule-builder"
+            element={<RuleBuilder />}
+          />
+          <Route
+            path="/predictive-failure-engine/failure-probability"
             element={<FailureProbability />}
+          />
+          <Route
+            path="/predictive-failure-engine/rul-explorer"
+            element={<RULExplorer />}
           />
         </Routes>
       </Layout>
