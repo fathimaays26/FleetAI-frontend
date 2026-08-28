@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import RiskBadge from "../components/pfe/RiskBadge";
 import VinRankedList from "../components/pfe/VinRankedList";
 import DegradationCurveChart from "../components/pfe/DegradationCurveChart";
+import ProbabilityTrendChart from "../components/pfe/ProbabilityTrendChart";
 
 const API_BASE_URL = "http://localhost:8000";
 
@@ -82,6 +83,7 @@ export default function RULExplorer() {
                     riskTier: item.risk,
                     details: null,
                     curve: null,
+                    trend: [],
                   });
 
                   return acc;
@@ -150,23 +152,29 @@ export default function RULExplorer() {
         setDetailLoading(true);
         setDetailError("");
         const query = `part_code=${encodeURIComponent(part.partCode)}`;
-        const [detailsResponse, curveResponse] = await Promise.all([
-          fetch(
-            `${API_BASE_URL}/api/rul/${encodeURIComponent(vin.vin)}/details?${query}`,
-            { signal: controller.signal },
-          ),
-          fetch(
-            `${API_BASE_URL}/api/rul/${encodeURIComponent(vin.vin)}/degradation-curve?${query}`,
-            { signal: controller.signal },
-          ),
-        ]);
+        const [detailsResponse, curveResponse, trendResponse] =
+          await Promise.all([
+            fetch(
+              `${API_BASE_URL}/api/rul/${encodeURIComponent(vin.vin)}/details?${query}`,
+              { signal: controller.signal },
+            ),
+            fetch(
+              `${API_BASE_URL}/api/rul/${encodeURIComponent(vin.vin)}/degradation-curve?${query}`,
+              { signal: controller.signal },
+            ),
+            fetch(
+              `${API_BASE_URL}/api/predictions/trend/${encodeURIComponent(vin.vin)}?${query}`,
+              { signal: controller.signal },
+            ),
+          ]);
         if (!detailsResponse.ok || !curveResponse.ok) {
           throw new Error("Failed to load RUL details");
         }
 
-        const [details, curveResponseData] = await Promise.all([
+        const [details, curveResponseData, trendData] = await Promise.all([
           detailsResponse.json(),
           curveResponse.json(),
+          trendResponse.ok ? trendResponse.json() : Promise.resolve([]),
         ]);
 
         setVins((currentVins) =>
@@ -180,6 +188,11 @@ export default function RULExplorer() {
                       ...currentPart,
                       details,
                       curve: toCurve(curveResponseData),
+                      trend: Array.isArray(trendData)
+                        ? trendData
+                            .map((item) => item.probability)
+                            .filter((value) => value != null)
+                        : [],
                     }
                   : currentPart,
               ),
@@ -373,4 +386,14 @@ export default function RULExplorer() {
       </div>
     </div>
   );
+
+  {
+    part.trend.length ? (
+      <ProbabilityTrendChart trend={part.trend} />
+    ) : (
+      <div className="bg-white rounded-xl border border-gray-200 p-5 text-sm text-gray-500">
+        No probability trend data available for this VIN and part.
+      </div>
+    );
+  }
 }
