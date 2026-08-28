@@ -5,10 +5,19 @@ const styles = {
 };
 
 export default function RiskBadge({ level }) {
+  const normalizedLevel = String(level || "green").toLowerCase();
+
+  const safeLevel = styles[normalizedLevel]
+    ? normalizedLevel
+    : "green";
+
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${styles[level]}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${styles[safeLevel]}`}
+    >
       <span className="w-1.5 h-1.5 rounded-full bg-current" />
-      {level.toUpperCase()}
+
+      {safeLevel.toUpperCase()}
     </span>
   );
 }
