@@ -56,10 +56,20 @@ export default function AIAssistant() {
       });
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
+  const errorData = await response.json().catch(() => ({}));
 
-      const data = await response.json();
+  if (response.status === 429) {
+    throw new Error(
+      "FleetGuard AI has temporarily reached its request limit. Please try again later."
+    );
+  }
+
+  throw new Error(
+    errorData.detail || "FleetGuard AI could not process your request."
+  );
+}
+
+const data = await response.json();
 
       // Add actual AI response
       setMessages((previous) => [
@@ -78,7 +88,9 @@ export default function AIAssistant() {
         {
           id: Date.now() + 1,
           role: "assistant",
-          text: "Sorry, I couldn't connect to the FleetGuard AI backend. Please make sure the backend server is running.",
+          text:
+  error.message ||
+  "FleetGuard AI could not process your request. Please try again.",
         },
       ]);
     } finally {
