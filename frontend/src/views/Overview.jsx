@@ -60,7 +60,7 @@ export default function Overview() {
             green: item.low_risk,
             amber: item.medium_risk,
             red: item.high_risk,
-          }))
+          })),
         );
 
         setRiskDistribution({
@@ -70,18 +70,36 @@ export default function Overview() {
         });
 
         setTopRiskVehicles(
-  predictionsData.map((item) => ({
-    vin: item.vin,
-    vehicle: item.vin,
-    miles: "—",
-    fleet: "—",
-    region: "—",
-    component: item.part_code,
-    probability: item.failure_probability_pct,
-    rul: item.rul_km,
-    risk: item.risk_tier?.toLowerCase() || "green",
-  }))
-);
+          [...predictionsData]
+            .filter((item) => item)
+            .sort(
+              (a, b) => Number(b.probability ?? 0) - Number(a.probability ?? 0),
+            )
+            .map((item) => {
+              const probability = item.probability ?? null;
+              const risk =
+                item.risk?.toLowerCase() ||
+                (probability == null
+                  ? null
+                  : probability >= 70
+                    ? "red"
+                    : probability >= 40
+                      ? "amber"
+                      : "green");
+
+              return {
+                vin: item.vin,
+                vehicle: item.vehicle || item.vin,
+                miles: item.miles || "—",
+                fleet: item.fleet || "—",
+                region: item.region || "—",
+                component: item.component || item.part_code || "—",
+                probability,
+                rul: item.rul ?? null,
+                risk,
+              };
+            }),
+        );
 
         setAlerts(alertsData.alerts || []);
         setInsights(alertsData.insights || []);
@@ -115,9 +133,7 @@ export default function Overview() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">
-          Fleet Overview
-        </h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Fleet Overview</h1>
         <p className="text-gray-500">
           Fleet health, risk distribution and maintenance signals across your
           entire fleet.
@@ -156,9 +172,7 @@ export default function Overview() {
           <FleetRiskTrendChart data={riskTrend} />
         </div>
 
-        <RiskDistributionPanel
-          distribution={riskDistribution}
-        />
+        <RiskDistributionPanel distribution={riskDistribution} />
       </div>
 
       <TopRiskVehiclesTable vehicles={topRiskVehicles} />
