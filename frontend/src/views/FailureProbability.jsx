@@ -125,9 +125,12 @@ export default function FailureProbability() {
           trendResponse.json(),
           driversResponse.json(),
         ]);
-        const trend = (Array.isArray(trendData) ? trendData : []).map(
-          (item) => item.probability,
-        );
+        const trend = (Array.isArray(trendData) ? trendData : [])
+          .filter((item) => item?.probability != null)
+          .map((item) => ({
+            period: item.week_start_date || item.date || item.week,
+            value: item.probability,
+          }));
         const drivers = (Array.isArray(driversData) ? driversData : []).map(
           (item) => ({
             signal: item.signal_name,

@@ -14,23 +14,6 @@ import { ClipboardList, CheckCircle2, Gauge, Zap } from "lucide-react";
 
 const API_BASE_URL = "http://localhost:8000/api";
 
-function buildFormula(selectedSignals) {
-  const total = selectedSignals.reduce((sum, s) => sum + s.value, 0);
-  if (!total) return "No selected signal weights available";
-
-  const terms = [...selectedSignals]
-    .sort((a, b) => b.value - a.value)
-    .map((s) => {
-      const coeff = (s.value / total).toFixed(2);
-      const key = s.signal
-        .toLowerCase()
-        .replace(/[^a-z]+/g, "_")
-        .replace(/^_|_$/g, "");
-      return `${coeff}·${key}`;
-    });
-  return `failure_probability = ${terms.join(" + ")}`;
-}
-
 export default function CalculationRuleStep({
   part,
   selectedSignals,
@@ -43,11 +26,6 @@ export default function CalculationRuleStep({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [ruleTrend, setRuleTrend] = useState([]);
-
-  const formulaText = buildFormula(selectedSignals);
-  const selectedWeightPct = selectedSignals.length
-    ? Math.round(selectedSignals.reduce((sum, signal) => sum + signal.value, 0))
-    : null;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -72,6 +50,9 @@ export default function CalculationRuleStep({
           daysToAlert: result.days_to_alert,
           rulePrecision: result.rule_precision_pct,
           ruleCoverage: result.rule_coverage_pct,
+          status: result.status,
+          reason: result.reason,
+          evaluation: result.evaluation,
         });
       } catch (requestError) {
         if (requestError.name !== "AbortError") {
@@ -144,13 +125,19 @@ export default function CalculationRuleStep({
             {ruleTrend.length ? (
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart
-                  data={ruleTrend.map((item, index) => ({
-                    week: `W-${ruleTrend.length - index}`,
-                    value: item.probability,
-                  }))}
+                  data={ruleTrend
+                    .filter((item) => item?.probability != null)
+                    .map((item, index) => ({
+                      period:
+                        item.week_start_date ||
+                        item.date ||
+                        item.week ||
+                        `Point ${index + 1}`,
+                      value: item.probability,
+                    }))}
                 >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                  <XAxis dataKey="period" tick={{ fontSize: 11 }} />
                   <YAxis
                     domain={[0, 100]}
                     tickFormatter={(value) => `${value}%`}
@@ -184,8 +171,7 @@ export default function CalculationRuleStep({
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-4">
-              Which Signals Drive This Prediction — All Selected, Per the
-              Formula
+              Selected Signals and Correlation Weights
             </h3>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart
@@ -244,21 +230,16 @@ export default function CalculationRuleStep({
         </button>
       </div>
       <p className="text-sm text-gray-500 mb-5">
-        A linear regression-style formula built from every signal selected in
-        the previous step — no if/else branching.
+        The backend evaluates every selected signal using grouped, out-of-sample
+        historical backtesting.
       </p>
 
       <div className="bg-gray-900 text-gray-100 rounded-xl p-5 mb-6 font-mono text-sm space-y-2">
-        <div className="text-purple-300">{formulaText}</div>
-        <div className="text-gray-400 text-xs">
-          coefficients = each signal's share of total correlation weight (Σ =
-          1.00, all {selectedSignals.length} selected signals included)
+        <div className="text-purple-300">
+          BACKTEST SIGNALS:{" "}
+          {selectedSignals.map((signal) => signal.signal).join(", ")}
         </div>
-        <div className="text-emerald-300">
-          SELECTED WEIGHT COVERAGE:{" "}
-          {selectedWeightPct == null ? "—" : `${selectedWeightPct}%`} for{" "}
-          {part.description}
-        </div>
+        
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -313,6 +294,18 @@ export default function CalculationRuleStep({
           </p>
         </div>
       </div>
+
+      {!backtestLoading && backtest?.reason && (
+        <div
+          className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+            backtest.status === "ok"
+              ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+              : "border-amber-100 bg-amber-50 text-amber-700"
+          }`}
+        >
+          {backtest.reason}
+        </div>
+      )}
 
       {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
       <button

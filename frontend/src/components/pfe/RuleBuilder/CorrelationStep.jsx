@@ -30,11 +30,19 @@ export default function CorrelationStep({ part, onBack, onBuildRule }) {
       })
       .then((data) =>
         setSignals(
-          (Array.isArray(data) ? data : []).map((item) => ({
-            signal: item.signal,
-            value: item.weight * 100,
-            included: true,
-          })),
+          (Array.isArray(data) ? data : [])
+            .map((item) => ({
+              signal: item.signal,
+              value: Number(item.weight) * 100,
+              included: true,
+            }))
+            .filter(
+              (item) =>
+                item.signal &&
+                Number.isFinite(item.value) &&
+                item.value >= 0 &&
+                item.value <= 100,
+            ),
         ),
       )
       .catch((requestError) => {
@@ -55,7 +63,9 @@ export default function CorrelationStep({ part, onBack, onBuildRule }) {
     );
   };
 
-  const chartData = [...signals].sort((a, b) => b.value - a.value);
+  const chartData = signals
+    .filter((signal) => signal.included)
+    .sort((a, b) => b.value - a.value);
   const anySelected = signals.some((s) => s.included);
 
   return (

@@ -1,5 +1,9 @@
 # React + Vite
 
+## Local API
+
+The frontend expects the mock API on port `8000`. Run `npm run api` in one terminal and `npm run dev` in another.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

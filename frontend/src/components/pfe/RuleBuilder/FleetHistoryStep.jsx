@@ -115,15 +115,22 @@ export default function FleetHistoryStep({
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-4">
           Monthly Failure Count, Trailing 12 Months
         </h3>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={history.monthly_histogram || []}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip />
-            <Bar dataKey="count" fill="#e0919b" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {Array.isArray(history.monthly_histogram) &&
+        history.monthly_histogram.length ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={history.monthly_histogram}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#e0919b" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex h-[260px] items-center justify-center text-sm text-gray-500">
+            No monthly failure history available.
+          </div>
+        )}
       </div>
 
       <button

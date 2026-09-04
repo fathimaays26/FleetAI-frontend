@@ -5,8 +5,6 @@ import TopPrecursorChart from "../components/pfe/TopPrecursorChart";
 
 const API_BASE_URL = "http://localhost:8000/api";
 
-const getSignalKey = (signal) => signal?.trim().toLowerCase();
-
 export default function PFEOverview() {
   const [kpis, setKpis] = useState(null);
   const [precursors, setPrecursors] = useState([]);
@@ -22,64 +20,29 @@ export default function PFEOverview() {
       fetch(`${API_BASE_URL}/engine/top-precursors`, {
         signal: controller.signal,
       }),
-      fetch(`${API_BASE_URL}/parts`, { signal: controller.signal }),
     ])
-      .then(async ([kpisResponse, precursorsResponse, partsResponse]) => {
-        if (!kpisResponse.ok || !precursorsResponse.ok || !partsResponse.ok)
+      .then(async ([kpisResponse, precursorsResponse]) => {
+        if (!kpisResponse.ok || !precursorsResponse.ok)
           throw new Error("PFE overview request failed");
-        const [kpisData, precursorsData, partsData] = await Promise.all([
+        const [kpisData, precursorsData] = await Promise.all([
           kpisResponse.json(),
           precursorsResponse.json(),
-          partsResponse.json(),
         ]);
 
-        const partCodes = Object.values(partsData || {})
-          .flatMap((partGroup) => (Array.isArray(partGroup) ? partGroup : []))
-          .map((part) => part.part_code)
-          .filter(Boolean);
-        const correlationResponses = await Promise.all(
-          partCodes.map((partCode) =>
-            fetch(
-              `${API_BASE_URL}/ml/correlations?part_code=${encodeURIComponent(partCode)}`,
-              { signal: controller.signal },
-            ),
-          ),
-        );
-        const correlationData = await Promise.all(
-          correlationResponses.map((response) =>
-            response.ok ? response.json() : [],
-          ),
-        );
-        const signalNames = [
-          ...correlationData.flatMap((signals) =>
-            Array.isArray(signals) ? signals.map((item) => item.signal) : [],
-          ),
-          ...(Array.isArray(precursorsData)
-            ? precursorsData.map((item) => item.signal_name)
-            : []),
-        ];
-        const measuredValues = new Map(
-          (Array.isArray(precursorsData) ? precursorsData : [])
-            .filter((item) => getSignalKey(item.signal_name))
-            .map((item) => [getSignalKey(item.signal_name), item.value]),
-        );
-        const allSignals = [...new Set(signalNames.map(getSignalKey))]
-          .filter(Boolean)
-          .map((signalKey) => ({
-            signal: signalNames.find(
-              (signal) => getSignalKey(signal) === signalKey,
-            ),
-            value: measuredValues.get(signalKey) ?? 0,
-            hasMeasuredValue: measuredValues.has(signalKey),
-          }))
-          .sort(
-            (first, second) =>
-              Number(second.hasMeasuredValue) -
-                Number(first.hasMeasuredValue) || second.value - first.value,
-          );
+        const precursorRows = Array.isArray(precursorsData)
+          ? precursorsData
+              .filter(
+                (item) =>
+                  item?.signal_name && Number.isFinite(Number(item.value)),
+              )
+              .map((item) => ({
+                signal: item.signal_name,
+                value: Number(item.value),
+              }))
+          : [];
 
         setKpis(kpisData);
-        setPrecursors(allSignals);
+        setPrecursors(precursorRows);
       })
       .catch((requestError) => {
         if (requestError.name !== "AbortError")

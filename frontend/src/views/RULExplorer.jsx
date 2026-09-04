@@ -6,33 +6,8 @@ import ProbabilityTrendChart from "../components/pfe/ProbabilityTrendChart";
 
 const API_BASE_URL = "http://localhost:8000";
 
-// Backend currently uses 114 km/day for RUL conversion.
-const DAILY_KM_USAGE = 114;
-
 const formatKm = (value) =>
   value == null ? "—" : `${Number(value).toLocaleString()} km`;
-
-const parseRulKm = (value) => {
-  if (value == null) return null;
-
-  if (typeof value === "number") {
-    return value;
-  }
-
-  const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
-
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const calculateRulDays = (rulKm) => {
-  const km = parseRulKm(rulKm);
-
-  if (km == null) {
-    return null;
-  }
-
-  return Math.floor(km / DAILY_KM_USAGE);
-};
 
 const toCurve = (curveResponse) => {
   if (
@@ -43,11 +18,11 @@ const toCurve = (curveResponse) => {
   }
 
   const observed = curveResponse.curve_data.filter(
-    (point) => !point.is_projection
+    (point) => !point.is_projection,
   );
 
   const projected = curveResponse.curve_data.filter(
-    (point) => point.is_projection
+    (point) => point.is_projection,
   );
 
   const lastObserved = observed[observed.length - 1];
@@ -60,9 +35,14 @@ const toCurve = (curveResponse) => {
   }
 
   return {
-    solidEnd: lastObserved.km,
-    values: observed.map((point) => point.health_index),
-    dashedValues: projected.map((point) => point.health_index),
+    observed: observed.map((point) => ({
+      km: point.km,
+      healthIndex: point.health_index,
+    })),
+    projected: projected.map((point) => ({
+      km: point.km,
+      healthIndex: point.health_index,
+    })),
     failureThreshold: curveResponse.failure_threshold_index,
     maxX: lastPoint.km,
   };
@@ -95,7 +75,7 @@ export default function RULExplorer() {
           `${API_BASE_URL}/api/predictions/?sort=desc`,
           {
             signal: controller.signal,
-          }
+          },
         );
 
         if (!response.ok) {
@@ -119,18 +99,14 @@ export default function RULExplorer() {
                     };
                   }
 
-                  const rulKm = parseRulKm(item.rul);
-
                   acc[item.vin].parts.push({
                     name: item.component,
                     partCode: item.part_code,
                     probability: item.probability,
                     riskTier: item.risk,
 
-                    // IMPORTANT:
-                    // Keep the RUL already returned by predictions API.
-                    rulKm: rulKm,
-                    rulDays: calculateRulDays(rulKm),
+                    // RUL days are loaded from the backend details endpoint.
+                    rulDays: null,
 
                     // These are loaded separately for the selected VIN.
                     details: null,
@@ -139,20 +115,63 @@ export default function RULExplorer() {
                   });
 
                   return acc;
-                }, {})
+                }, {}),
             )
           : [];
 
-        setVins(grouped);
+        const groupedWithRulDays = await Promise.all(
+          grouped.map(async (currentVin) => {
+            const firstPart = currentVin.parts[0];
 
-        setSelectedVin(grouped[0]?.vin || null);
-        setSelectedPartCode(grouped[0]?.parts[0]?.partCode || null);
+            if (!firstPart) {
+              return currentVin;
+            }
+
+            try {
+              const response = await fetch(
+                `${API_BASE_URL}/api/rul/${encodeURIComponent(
+                  currentVin.vin,
+                )}/details?part_code=${encodeURIComponent(firstPart.partCode)}`,
+                { signal: controller.signal },
+              );
+
+              if (!response.ok) {
+                return currentVin;
+              }
+
+              const details = await response.json();
+
+              return {
+                ...currentVin,
+                parts: currentVin.parts.map((currentPart, index) =>
+                  index === 0
+                    ? {
+                        ...currentPart,
+                        rulDays: details?.predicted_rul_days ?? null,
+                      }
+                    : currentPart,
+                ),
+              };
+            } catch (rulError) {
+              if (rulError.name === "AbortError") {
+                throw rulError;
+              }
+
+              return currentVin;
+            }
+          }),
+        );
+
+        setVins(groupedWithRulDays);
+
+        setSelectedVin(groupedWithRulDays[0]?.vin || null);
+        setSelectedPartCode(groupedWithRulDays[0]?.parts[0]?.partCode || null);
       } catch (requestError) {
         if (requestError.name !== "AbortError") {
           console.error("RUL predictions error:", requestError);
 
           setError(
-            "Unable to load RUL predictions. Please make sure the backend is running."
+            "Unable to load RUL predictions. Please make sure the backend is running.",
           );
         }
       } finally {
@@ -171,8 +190,7 @@ export default function RULExplorer() {
   // CURRENT VIN + PART
   // ---------------------------------------------------------
 
-  const vin =
-    vins.find((item) => item.vin === selectedVin) || null;
+  const vin = vins.find((item) => item.vin === selectedVin) || null;
 
   const part =
     vin?.parts.find((item) => item.partCode === selectedPartCode) ||
@@ -198,7 +216,7 @@ export default function RULExplorer() {
         const partsWithDetails = await Promise.all(
           vin.parts.map(async (currentPart) => {
             const query = `part_code=${encodeURIComponent(
-              currentPart.partCode
+              currentPart.partCode,
             )}`;
 
             try {
@@ -206,29 +224,29 @@ export default function RULExplorer() {
                 await Promise.all([
                   fetch(
                     `${API_BASE_URL}/api/rul/${encodeURIComponent(
-                      vin.vin
+                      vin.vin,
                     )}/details?${query}`,
                     {
                       signal: controller.signal,
-                    }
+                    },
                   ),
 
                   fetch(
                     `${API_BASE_URL}/api/rul/${encodeURIComponent(
-                      vin.vin
+                      vin.vin,
                     )}/degradation-curve?${query}`,
                     {
                       signal: controller.signal,
-                    }
+                    },
                   ),
 
                   fetch(
                     `${API_BASE_URL}/api/predictions/trend/${encodeURIComponent(
-                      vin.vin
+                      vin.vin,
                     )}?${query}`,
                     {
                       signal: controller.signal,
-                    }
+                    },
                   ),
                 ]);
 
@@ -253,8 +271,11 @@ export default function RULExplorer() {
 
                 trend: Array.isArray(trendData)
                   ? trendData
-                      .map((item) => item.probability)
-                      .filter((value) => value != null)
+                      .filter((item) => item?.probability != null)
+                      .map((item) => ({
+                        period: item.week_start_date || item.date || item.week,
+                        value: item.probability,
+                      }))
                   : [],
               };
             } catch (partError) {
@@ -264,12 +285,12 @@ export default function RULExplorer() {
 
               console.error(
                 `Failed to load RUL data for ${currentPart.partCode}:`,
-                partError
+                partError,
               );
 
               return currentPart;
             }
-          })
+          }),
         );
 
         setVins((currentVins) =>
@@ -282,15 +303,13 @@ export default function RULExplorer() {
               ...currentVin,
               parts: partsWithDetails,
             };
-          })
+          }),
         );
       } catch (requestError) {
         if (requestError.name !== "AbortError") {
           console.error("RUL details error:", requestError);
 
-          setDetailError(
-            "Unable to load RUL details for this VIN."
-          );
+          setDetailError("Unable to load RUL details for this VIN.");
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -380,16 +399,11 @@ export default function RULExplorer() {
         getPrimaryStat={(item) => {
           const firstPart = item.parts[0];
 
-          // Use prediction API RUL immediately.
-          // This means ALL VINs show their RUL,
-          // not just the currently selected VIN.
-          if (firstPart?.rulDays != null) {
-            return `${firstPart.rulDays}d`;
-          }
+          const rulDays =
+            firstPart?.rulDays ?? firstPart?.details?.predicted_rul_days;
 
-          // Fallback if details have already loaded.
-          if (firstPart?.details?.predicted_rul_days != null) {
-            return `${firstPart.details.predicted_rul_days}d`;
+          if (rulDays != null) {
+            return `${rulDays}d`;
           }
 
           return "—";
@@ -407,41 +421,32 @@ export default function RULExplorer() {
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {vin.vin}
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900">{vin.vin}</h2>
 
             <RiskBadge tier={vin.riskTier} />
           </div>
 
           <p className="text-sm text-gray-500 mb-4">
-            {vin.model} · {vin.region} · {vin.parts.length} parts
-            tracked on this VIN
+            {vin.model} · {vin.region} · {vin.parts.length} parts tracked on
+            this VIN
           </p>
 
           <div className="flex flex-wrap gap-2">
             {vin.parts.map((item) => {
               const displayDays =
-                item.rulDays ??
-                item.details?.predicted_rul_days ??
-                null;
+                item.rulDays ?? item.details?.predicted_rul_days ?? null;
 
               return (
                 <button
                   key={item.partCode}
-                  onClick={() =>
-                    setSelectedPartCode(item.partCode)
-                  }
+                  onClick={() => setSelectedPartCode(item.partCode)}
                   className={`px-3 py-1.5 rounded-full text-sm border ${
                     item.partCode === selectedPartCode
                       ? "border-purple-300 bg-purple-50 text-purple-700 font-medium"
                       : pillColor(item.riskTier)
                   }`}
                 >
-                  {item.name} ·{" "}
-                  {displayDays == null
-                    ? "—"
-                    : `${displayDays}d`}
+                  {item.name} · {displayDays == null ? "—" : `${displayDays}d`}
                 </button>
               );
             })}
@@ -454,9 +459,7 @@ export default function RULExplorer() {
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-xs text-gray-400">
-              RUL-{part.partCode}
-            </div>
+            <div className="text-xs text-gray-400">RUL-{part.partCode}</div>
 
             <RiskBadge tier={part.riskTier} />
           </div>
@@ -470,9 +473,7 @@ export default function RULExplorer() {
               Loading RUL details...
             </div>
           ) : detailError ? (
-            <div className="py-8 text-sm text-red-600">
-              {detailError}
-            </div>
+            <div className="py-8 text-sm text-red-600">{detailError}</div>
           ) : !details ? (
             <div className="py-8 text-sm text-gray-500">
               No RUL details available.
@@ -546,8 +547,8 @@ export default function RULExplorer() {
                 {part.probability == null
                   ? "—"
                   : `${part.probability}% failure probability`}
-                . Same part, same VIN, same underlying signal —
-                not a second opinion.
+                . Same part, same VIN, same underlying signal — not a second
+                opinion.
               </p>
             </>
           )}
@@ -573,8 +574,7 @@ export default function RULExplorer() {
           <ProbabilityTrendChart trend={part.trend} />
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 p-5 text-sm text-gray-500">
-            No probability trend data available for this VIN
-            and part.
+            No probability trend data available for this VIN and part.
           </div>
         )}
       </div>
