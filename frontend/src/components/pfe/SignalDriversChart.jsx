@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 
 export default function SignalDriversChart({ drivers }) {
   return (
@@ -12,6 +12,15 @@ export default function SignalDriversChart({ drivers }) {
           <CartesianGrid strokeDasharray="3 3" horizontal={false} />
           <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
           <YAxis type="category" dataKey="signal" tick={{ fontSize: 11 }} width={110} />
+          <Tooltip 
+        formatter={(value) => [`${value}%`, 'Contribution']}
+        cursor={{ fill: '#f3f4f6' }} // Adds a subtle gray background behind the hovered bar
+        contentStyle={{ 
+          borderRadius: '8px', 
+          border: '1px solid #e5e7eb', 
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
+        }}
+      />
           <Bar dataKey="value" fill="#a78bfa" radius={[0, 4, 4, 0]} barSize={16} />
         </BarChart>
       </ResponsiveContainer>
