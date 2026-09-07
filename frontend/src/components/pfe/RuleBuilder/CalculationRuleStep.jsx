@@ -9,6 +9,7 @@ import {
   BarChart,
   Bar,
   ResponsiveContainer,
+  Tooltip,
 } from "recharts";
 import { ClipboardList, CheckCircle2, Gauge, Zap } from "lucide-react";
 
@@ -146,7 +147,7 @@ export default function CalculationRuleStep({
                 <LineChart
                   data={ruleTrend.map((item, index) => ({
                     week: `W-${ruleTrend.length - index}`,
-                    value: item.probability,
+                    value: (item.probability * 100).toFixed(1),
                   }))}
                 >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -156,6 +157,11 @@ export default function CalculationRuleStep({
                     tickFormatter={(value) => `${value}%`}
                     tick={{ fontSize: 11 }}
                   />
+                  <Tooltip 
+          contentStyle={{ backgroundColor: '#1F2937', border: 'none', borderRadius: '8px', color: '#FFF' }}
+          formatter={(value) => [`${value}%`, 'Fleet Risk Ratio']}
+          labelStyle={{ color: '#9CA3AF', marginBottom: '4px' }}
+        />
                   <ReferenceLine
                     y={70}
                     stroke="#f87171"

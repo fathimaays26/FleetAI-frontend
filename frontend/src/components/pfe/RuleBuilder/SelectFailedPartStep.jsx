@@ -90,7 +90,7 @@ export default function SelectFailedPartStep({ onSelectPart }) {
           >
             <Zap className="w-4 h-4 text-purple-500 mb-2" />
             <div className="font-medium text-gray-900 text-sm">
-              {part.description}
+              {part.part_name}
             </div>
             <div className="text-xs text-gray-400">{part.category}</div>
           </button>

@@ -7,6 +7,19 @@ const API_BASE_URL = "http://localhost:8000/api";
 
 const getSignalKey = (signal) => signal?.trim().toLowerCase();
 
+// ✨ NEW: Added a mapping dictionary to convert raw database strings to UI-friendly labels
+const SIGNAL_NAME_MAP = {
+  "coolant_temp_variance": "Coolant temp variance",
+  "battery_voltage_sag": "Battery voltage sag",
+  "harsh_braking_frequency": "Harsh braking frequency",
+  "short_trip_ratio": "Short-trip ratio",
+  "dtc_recurrence_rate": "DTC recurrence rate",
+  "oil_pressure_dips": "Oil pressure dips",
+  "high_rpm_dwell_time": "High RPM dwell time",
+  "idle_time_pct": "Idle time percentage",
+  "overload_duty_share": "Overload duty share"
+};
+
 export default function PFEOverview() {
   const [kpis, setKpis] = useState(null);
   const [precursors, setPrecursors] = useState([]);
@@ -63,15 +76,24 @@ export default function PFEOverview() {
             .filter((item) => getSignalKey(item.signal_name))
             .map((item) => [getSignalKey(item.signal_name), item.value]),
         );
+        
         const allSignals = [...new Set(signalNames.map(getSignalKey))]
           .filter(Boolean)
-          .map((signalKey) => ({
-            signal: signalNames.find(
+          .map((signalKey) => {
+            const rawSignal = signalNames.find(
               (signal) => getSignalKey(signal) === signalKey,
-            ),
-            value: measuredValues.get(signalKey) ?? 0,
-            hasMeasuredValue: measuredValues.has(signalKey),
-          }))
+            );
+            return {
+              // ✨ MODIFIED: Safely fall back to raw string if not in map, but overrides with friendly name
+              signal: SIGNAL_NAME_MAP[rawSignal] || rawSignal,
+              // ✨ NEW: Inject an explicit 'label' property in case TopPrecursorChart specifically looks for it
+              label: SIGNAL_NAME_MAP[rawSignal] || rawSignal,
+              value: measuredValues.get(signalKey) ?? 0,
+              hasMeasuredValue: measuredValues.has(signalKey),
+            };
+          })
+          // ✨ NEW: Filter out absolute zero values to remove duplicate flatlined bars at the bottom
+          .filter(item => item.value > 0)
           .sort(
             (first, second) =>
               Number(second.hasMeasuredValue) -
