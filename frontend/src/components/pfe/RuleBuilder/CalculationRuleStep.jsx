@@ -104,6 +104,9 @@ export default function CalculationRuleStep({
         }),
       });
       if (!ruleResponse.ok) throw new Error("Rule save failed");
+      const scoreResponse = await fetch(`${API_BASE_URL}/predictions/score`, {
+        method: "POST"
+      });
       const trendResponse = await fetch(
         `${API_BASE_URL}/ml/rule-trend?part_code=${encodeURIComponent(part.part_code)}`,
       );
@@ -211,6 +214,15 @@ export default function CalculationRuleStep({
                   dataKey="signal"
                   tick={{ fontSize: 11 }}
                   width={110}
+                />
+              <Tooltip 
+                formatter={(value) => [`${value}%`, 'Contribution']}
+                cursor={{ fill: '#f3f4f6' }} // Adds a subtle gray background behind the hovered bar
+                contentStyle={{ 
+                borderRadius: '8px', 
+                border: '1px solid #e5e7eb', 
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
+                  }}
                 />
                 <Bar
                   dataKey="value"

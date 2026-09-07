@@ -12,7 +12,7 @@ export default function ProbabilityTrendChart({ trend = [] }) {
     return {
       week: weekLabel,
       // Multiply by 100 so small ratios map correctly against the 0-100% Y-axis
-      value: Number(((rawProb || 0) * 100).toFixed(2))
+      value: Number(((rawProb || 0)).toFixed(2))
     };
   });
 

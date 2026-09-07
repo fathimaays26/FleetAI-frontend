@@ -34,6 +34,33 @@ const calculateRulDays = (rulKm) => {
   return Math.floor(km / DAILY_KM_USAGE);
 };
 
+// ---------------------------------------------------------
+// RISK TIER — SINGLE SOURCE OF TRUTH
+// ---------------------------------------------------------
+// Risk color must always track the actual RUL-day countdown,
+// not the backend's ML probability `risk` field. Those two can
+// disagree (e.g. an "amber" probability tier attached to a
+// 1-day RUL), which was the source of the visual desync bug.
+// Every tier used for display (VIN badge, part pills, part
+// detail badge) is derived here from rulDays, once, rather than
+// trusting whatever `risk` the backend attached to a record.
+
+const RISK_CRITICAL_MAX_DAYS = 2;
+const RISK_WARNING_MAX_DAYS = 7;
+
+const getRiskTierFromDays = (days) => {
+  if (days == null || !Number.isFinite(days)) return null;
+  if (days <= RISK_CRITICAL_MAX_DAYS) return "red";
+  if (days <= RISK_WARNING_MAX_DAYS) return "amber";
+  return "green";
+};
+
+// The RUL-days value actually shown/used for a part: prefer the
+// value already returned by the predictions list, falling back
+// to the details endpoint's refined value once it has loaded.
+const getDisplayDays = (part) =>
+  part?.rulDays ?? part?.details?.predicted_rul_days ?? null;
+
 const toCurve = (curveResponse) => {
   if (
     !Array.isArray(curveResponse?.curve_data) ||
@@ -84,7 +111,7 @@ export default function RULExplorer() {
   // ---------------------------------------------------------
 
   useEffect(() => {
-    const controller = new AbortController();
+  const controller = new AbortController();
 
     async function loadPredictions() {
       try {
@@ -120,19 +147,31 @@ export default function RULExplorer() {
                   }
 
                   const rulKm = parseRulKm(item.rul);
+                  const rulDays = calculateRulDays(rulKm);
 
                   acc[item.vin].parts.push({
                     name: item.component,
                     partCode: item.part_code,
                     probability: item.probability,
-                    riskTier: item.risk,
+
+                    // Risk tier is derived from rulDays, not the
+                    // backend's ML probability tier, so pills/badges
+                    // never disagree with the countdown they sit next to.
+                    riskTier: getRiskTierFromDays(rulDays) ?? item.risk,
 
                     // IMPORTANT:
                     // Keep the RUL already returned by predictions API.
                     rulKm: rulKm,
-                    rulDays: calculateRulDays(rulKm),
+                    rulDays,
 
-                    // These are loaded separately for the selected VIN.
+                    // Loaded lazily — only once this part is actually
+                    // selected (see the on-demand effect below).
+                    // `fetched` distinguishes "never requested" from
+                    // "requested but the endpoint returned nothing",
+                    // so a legitimately-empty response is still cached
+                    // and doesn't get refetched every time the part is
+                    // reselected.
+                    fetched: false,
                     details: null,
                     curve: null,
                     trend: [],
@@ -142,6 +181,26 @@ export default function RULExplorer() {
                 }, {})
             )
           : [];
+
+        // ✨ THE FIX: Sort vehicles by their most urgent (lowest) RUL days
+        grouped.sort((a, b) => {
+          // Find the lowest rulDays among all parts for vehicle A
+          const aMinDays = Math.min(...a.parts.map((p) => p.rulDays));
+          // Find the lowest rulDays among all parts for vehicle B
+          const bMinDays = Math.min(...b.parts.map((p) => p.rulDays));
+          
+          // Sort ascending (0d, 1d, 8d, 11d...)
+          return aMinDays - bMinDays;
+        });
+
+        // ✨ BONUS: Sort the parts inside each vehicle so the most urgent part is listed first
+        grouped.forEach(vinObj => {
+          vinObj.parts.sort((p1, p2) => p1.rulDays - p2.rulDays);
+
+          // VIN-level badge reflects whichever part is most urgent
+          // by days, matching the part that now sorts to the top.
+          vinObj.riskTier = vinObj.parts[0]?.riskTier ?? vinObj.riskTier;
+        });
 
         setVins(grouped);
 
@@ -166,7 +225,6 @@ export default function RULExplorer() {
 
     return () => controller.abort();
   }, []);
-
   // ---------------------------------------------------------
   // CURRENT VIN + PART
   // ---------------------------------------------------------
@@ -180,117 +238,132 @@ export default function RULExplorer() {
     null;
 
   // ---------------------------------------------------------
-  // LOAD RUL DETAILS FOR ALL PARTS OF SELECTED VIN
+  // LOAD RUL DETAILS/CURVE/TREND — ON DEMAND, PER PART
   // ---------------------------------------------------------
+  // Only the active (VIN, part) pair is fetched, and only once:
+  // if `part.fetched` is already true (this part's data is
+  // cached in state from an earlier visit), this effect is a
+  // no-op and the cached details/curve/trend render instantly.
 
   useEffect(() => {
-    if (!vin || !vin.parts.length) {
+    if (!vin || !part) {
+      return undefined;
+    }
+
+    setDetailError("");
+
+    // Cache hit — this part's data was already fetched earlier
+    // in the session, so skip the network call entirely.
+    if (part.fetched) {
+      setDetailLoading(false);
       return undefined;
     }
 
     const controller = new AbortController();
+    const targetVin = vin.vin;
+    const targetPartCode = part.partCode;
 
-    async function loadRulData() {
+    async function loadPartData() {
       try {
         setDetailLoading(true);
-        setDetailError("");
 
-        const partsWithDetails = await Promise.all(
-          vin.parts.map(async (currentPart) => {
-            const query = `part_code=${encodeURIComponent(
-              currentPart.partCode
-            )}`;
+        const query = `part_code=${encodeURIComponent(targetPartCode)}`;
 
-            try {
-              const [detailsResponse, curveResponse, trendResponse] =
-                await Promise.all([
-                  fetch(
-                    `${API_BASE_URL}/api/rul/${encodeURIComponent(
-                      vin.vin
-                    )}/details?${query}`,
-                    {
-                      signal: controller.signal,
-                    }
-                  ),
+        const [detailsResponse, curveResponse, trendResponse] =
+          await Promise.all([
+            fetch(
+              `${API_BASE_URL}/api/rul/${encodeURIComponent(
+                targetVin
+              )}/details?${query}`,
+              { signal: controller.signal }
+            ),
 
-                  fetch(
-                    `${API_BASE_URL}/api/rul/${encodeURIComponent(
-                      vin.vin
-                    )}/degradation-curve?${query}`,
-                    {
-                      signal: controller.signal,
-                    }
-                  ),
+            fetch(
+              `${API_BASE_URL}/api/rul/${encodeURIComponent(
+                targetVin
+              )}/degradation-curve?${query}`,
+              { signal: controller.signal }
+            ),
 
-                  fetch(
-                    `${API_BASE_URL}/api/predictions/trend/${encodeURIComponent(
-                      vin.vin
-                    )}?${query}`,
-                    {
-                      signal: controller.signal,
-                    }
-                  ),
-                ]);
+            fetch(
+              `${API_BASE_URL}/api/predictions/trend/${encodeURIComponent(
+                targetVin
+              )}?${query}`,
+              { signal: controller.signal }
+            ),
+          ]);
 
-              const details = detailsResponse.ok
-                ? await detailsResponse.json()
-                : null;
+        const details = detailsResponse.ok
+          ? await detailsResponse.json()
+          : null;
 
-              const curveResponseData = curveResponse.ok
-                ? await curveResponse.json()
-                : null;
+        const curveResponseData = curveResponse.ok
+          ? await curveResponse.json()
+          : null;
 
-              const trendData = trendResponse.ok
-                ? await trendResponse.json()
-                : [];
+        const trendData = trendResponse.ok
+          ? await trendResponse.json()
+          : [];
+
+        setVins((currentVins) =>
+          currentVins.map((currentVin) => {
+            if (currentVin.vin !== targetVin) {
+              return currentVin;
+            }
+
+            const updatedParts = currentVin.parts.map((currentPart) => {
+              if (currentPart.partCode !== targetPartCode) {
+                return currentPart;
+              }
+
+              // Recompute risk tier now that `details` may carry a
+              // refined predicted_rul_days — keeps pills/badges from
+              // going stale relative to what's actually displayed.
+              const refreshedDays = getDisplayDays({
+                ...currentPart,
+                details,
+              });
 
               return {
                 ...currentPart,
-
+                fetched: true,
                 details,
-
+                riskTier:
+                  getRiskTierFromDays(refreshedDays) ??
+                  currentPart.riskTier,
                 curve: toCurve(curveResponseData),
-
                 trend: Array.isArray(trendData)
                   ? trendData
                       .map((item) => item.probability)
                       .filter((value) => value != null)
                   : [],
               };
-            } catch (partError) {
-              if (partError.name === "AbortError") {
-                throw partError;
-              }
+            });
 
-              console.error(
-                `Failed to load RUL data for ${currentPart.partCode}:`,
-                partError
-              );
-
-              return currentPart;
-            }
-          })
-        );
-
-        setVins((currentVins) =>
-          currentVins.map((currentVin) => {
-            if (currentVin.vin !== vin.vin) {
-              return currentVin;
-            }
+            // Recompute the VIN-level tier across all parts (fetched
+            // or not — unfetched parts still have rulDays from the
+            // initial load) so the header badge always tracks whichever
+            // part is most urgent.
+            const mostUrgentDays = Math.min(
+              ...updatedParts.map((p) => getDisplayDays(p) ?? Infinity)
+            );
 
             return {
               ...currentVin,
-              parts: partsWithDetails,
+              parts: updatedParts,
+              riskTier:
+                getRiskTierFromDays(mostUrgentDays) ?? currentVin.riskTier,
             };
           })
         );
       } catch (requestError) {
         if (requestError.name !== "AbortError") {
-          console.error("RUL details error:", requestError);
-
-          setDetailError(
-            "Unable to load RUL details for this VIN."
+          console.error(
+            `RUL details error for ${targetPartCode}:`,
+            requestError
           );
+
+          setDetailError("Unable to load RUL details for this part.");
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -299,10 +372,10 @@ export default function RULExplorer() {
       }
     }
 
-    loadRulData();
+    loadPartData();
 
     return () => controller.abort();
-  }, [selectedVin]);
+  }, [selectedVin, selectedPartCode]);
 
   // ---------------------------------------------------------
   // SELECT VIN
@@ -359,6 +432,7 @@ export default function RULExplorer() {
   }
 
   const details = part.details;
+  
 
   // ---------------------------------------------------------
   // PAGE
@@ -379,20 +453,9 @@ export default function RULExplorer() {
         totalMatching={vins.length}
         getPrimaryStat={(item) => {
           const firstPart = item.parts[0];
+          const days = getDisplayDays(firstPart);
 
-          // Use prediction API RUL immediately.
-          // This means ALL VINs show their RUL,
-          // not just the currently selected VIN.
-          if (firstPart?.rulDays != null) {
-            return `${firstPart.rulDays}d`;
-          }
-
-          // Fallback if details have already loaded.
-          if (firstPart?.details?.predicted_rul_days != null) {
-            return `${firstPart.details.predicted_rul_days}d`;
-          }
-
-          return "—";
+          return days == null ? "—" : `${days}d`;
         }}
       />
 
@@ -421,10 +484,7 @@ export default function RULExplorer() {
 
           <div className="flex flex-wrap gap-2">
             {vin.parts.map((item) => {
-              const displayDays =
-                item.rulDays ??
-                item.details?.predicted_rul_days ??
-                null;
+              const displayDays = getDisplayDays(item);
 
               return (
                 <button
