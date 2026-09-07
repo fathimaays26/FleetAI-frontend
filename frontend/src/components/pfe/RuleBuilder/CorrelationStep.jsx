@@ -11,32 +11,56 @@ import {
 const API_BASE_URL = "http://localhost:8000/api";
 
 export default function CorrelationStep({ part, onBack, onBuildRule }) {
+  // 1. Unified state: Holds the signal name, its current weight, and if it is checked
   const [signals, setSignals] = useState([]);
+  // 2. API Trigger state: Tracks exactly what to send to the backend for recalculation
+  const [excluded, setExcluded] = useState([]);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
-    setSignals([]);
     setLoading(true);
     setError("");
+
+    // Build the query parameter (e.g., "?part_code=ALT-001&exclude=short_trip_ratio")
+    const excludeQuery = excluded.length > 0 
+      ? `&exclude=${encodeURIComponent(excluded.join(","))}` 
+      : "";
+
     fetch(
-      `${API_BASE_URL}/ml/correlations?part_code=${encodeURIComponent(part.part_code)}`,
+      `${API_BASE_URL}/ml/correlations?part_code=${encodeURIComponent(part.part_code)}${excludeQuery}`,
       { signal: controller.signal },
     )
       .then((response) => {
         if (!response.ok) throw new Error("Failed to load correlations");
         return response.json();
       })
-      .then((data) =>
-        setSignals(
-          (Array.isArray(data) ? data : []).map((item) => ({
-            signal: item.signal,
-            value: item.weight * 100,
-            included: true,
-          })),
-        ),
-      )
+      .then((data) => {
+        const apiData = Array.isArray(data) ? data : [];
+        
+        setSignals((prevSignals) => {
+          // INITIAL LOAD: Build the full list of checkboxes and initial weights
+          if (prevSignals.length === 0) {
+            return apiData.map(item => ({
+              signal: item.signal,
+              value: Number((item.weight * 100).toFixed(1)),
+              included: true
+            }));
+          }
+          
+          // RECALCULATION: Keep the existing checkboxes on screen, just update the math!
+          return prevSignals.map(p => {
+            const newData = apiData.find(a => a.signal === p.signal);
+            return {
+              ...p,
+              // If the backend didn't return a weight (because it was excluded), set it to 0
+              value: newData ? Number((newData.weight * 100).toFixed(1)) : 0
+            };
+          });
+        });
+      })
       .catch((requestError) => {
         if (requestError.name !== "AbortError")
           setError("Unable to load signal correlations.");
@@ -44,25 +68,36 @@ export default function CorrelationStep({ part, onBack, onBuildRule }) {
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
+      
     return () => controller.abort();
-  }, [part.part_code]);
+  }, [part.part_code, excluded]);
 
   const toggle = (signalName) => {
-    setSignals((prev) =>
-      prev.map((s) =>
-        s.signal === signalName ? { ...s, included: !s.included } : s,
-      ),
+    // 1. Instantly toggle the checkbox UI so it feels responsive
+    setSignals(prev => prev.map(s => 
+      s.signal === signalName ? { ...s, included: !s.included } : s
+    ));
+    
+    // 2. Update the excluded list to trigger the API recalculation
+    setExcluded(prev => 
+      prev.includes(signalName)
+        ? prev.filter(s => s !== signalName) // Re-include it
+        : [...prev, signalName]              // Exclude it
     );
   };
 
-  const chartData = [...signals].sort((a, b) => b.value - a.value);
+  // Filter out unchecked items from the visual chart, and sort highest to lowest
+  const chartData = [...signals]
+    .filter((s) => s.included)
+    .sort((a, b) => b.value - a.value);
+
   const anySelected = signals.some((s) => s.included);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-xl font-semibold text-gray-900">
-          Signal correlation — {part.description}
+          Signal correlation — {part.description || part.part_code}
         </h2>
         <button
           onClick={onBack}
@@ -76,7 +111,8 @@ export default function CorrelationStep({ part, onBack, onBuildRule }) {
         Uncheck any signal to exclude it from the rule.
       </p>
 
-      {loading ? (
+      {/* Check loading state against the signals array to prevent UI flashing */}
+      {loading && signals.length === 0 ? (
         <div className="py-10 text-sm text-gray-500">
           Loading correlations...
         </div>
@@ -88,7 +124,14 @@ export default function CorrelationStep({ part, onBack, onBuildRule }) {
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6 relative">
+            {/* Loading overlay for recalculations */}
+            {loading && signals.length > 0 && (
+              <div className="absolute inset-0 bg-white/40 z-10 flex items-center justify-center">
+                <span className="text-sm font-medium text-purple-600 animate-pulse">Recalculating...</span>
+              </div>
+            )}
+            
             <ResponsiveContainer width="100%" height={260}>
               <BarChart
                 data={chartData}
